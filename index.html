@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quadrant — The Four-Clue Puzzle</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0f0e0c;
+      --surface: #1a1915;
+      --border: #2e2c28;
+      --gold: #c9a84c;
+      --gold-dim: #6b5826;
+      --text: #e8e4da;
+      --text-dim: #7a7570;
+      --text-mid: #b0aa9f;
+      --red: #c0392b;
+      --green: #2ecc71;
+      --tab-h: 48px;
+      --radius: 4px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'IBM Plex Sans', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+      opacity: 0.025;
+      pointer-events: none;
+      z-index: 999;
+    }
+
+    /* ── HEADER ── */
+    header {
+      display: flex;
+      align-items: center;
+      padding: 20px 32px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .logo {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.6rem;
+      font-weight: 900;
+      letter-spacing: -0.02em;
+    }
+    .logo span { color: var(--gold); }
+    .subtitle {
+      font-size: 0.7rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+
+    /* ── TAB BAR ── */
+    .tab-bar-wrap {
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .tab-bar-wrap::-webkit-scrollbar { display: none; }
+    .tab-bar {
+      display: flex;
+      min-width: max-content;
+      padding: 0 24px;
+      gap: 4px;
+    }
+    .tab {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 18px;
+      height: var(--tab-h);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.72rem;
+      letter-spacing: 0.05em;
+      color: var(--text-dim);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      white-space: nowrap;
+      transition: color 0.15s, border-color 0.15s;
+      user-select: none;
+    }
+    .tab:hover { color: var(--text-mid); }
+    .tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+    .tab-num { font-size: 0.6rem; color: var(--text-dim); }
+    .tab.active .tab-num { color: var(--gold-dim); }
+    .tab-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--border);
+      flex-shrink: 0;
+    }
+    .tab.solved .tab-dot { background: var(--green); }
+    .tab.failed .tab-dot { background: var(--red); }
+
+    /* ── MAIN ── */
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 24px 60px;
+      max-width: 760px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* ── HINTS ── */
+    .hints-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      width: 100%;
+      margin-bottom: 36px;
+    }
+    .hint-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 22px;
+      position: relative;
+      animation: fadeUp 0.4s ease both;
+    }
+    .hint-card:nth-child(1) { animation-delay: 0.05s; }
+    .hint-card:nth-child(2) { animation-delay: 0.10s; }
+    .hint-card:nth-child(3) { animation-delay: 0.15s; }
+    .hint-card:nth-child(4) { animation-delay: 0.20s; }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .hint-label {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.6rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--gold-dim);
+      margin-bottom: 10px;
+    }
+    .hint-text {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.05rem;
+      line-height: 1.45;
+      color: var(--text);
+    }
+    .hint-number {
+      position: absolute;
+      top: 14px; right: 16px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 1.8rem;
+      font-weight: 500;
+      color: var(--border);
+      line-height: 1;
+      pointer-events: none;
+    }
+
+    /* ── ANSWER ── */
+    .answer-section {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+      animation: fadeUp 0.4s 0.25s ease both;
+    }
+    .answer-label {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      align-self: flex-start;
+    }
+    .blanks-wrap {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      justify-content: center;
+      width: 100%;
+    }
+    .word-group { display: flex; gap: 6px; }
+    .letter-box {
+      width: 38px; height: 48px;
+      border: none;
+      border-bottom: 2px solid var(--text-dim);
+      background: transparent;
+      color: var(--text);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 1.3rem;
+      text-align: center;
+      text-transform: uppercase;
+      transition: border-color 0.15s;
+      outline: none;
+      caret-color: var(--gold);
+      padding: 0;
+    }
+    .letter-box:focus   { border-bottom-color: var(--gold); }
+    .letter-box.correct { border-bottom-color: var(--green); color: var(--green); }
+    .letter-box.wrong   { border-bottom-color: var(--red);   color: var(--red); }
+    .letter-box:disabled { opacity: 0.6; cursor: default; }
+
+    /* ── CONTROLS ── */
+    .controls {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    button {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.72rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      cursor: pointer;
+      border-radius: var(--radius);
+      padding: 10px 22px;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+      border: 1px solid transparent;
+    }
+    .btn-primary { background: var(--gold); color: #0f0e0c; border-color: var(--gold); }
+    .btn-primary:hover { background: #e0bb6a; border-color: #e0bb6a; }
+    .btn-ghost { background: transparent; color: var(--text-dim); border-color: var(--border); }
+    .btn-ghost:hover { color: var(--text); border-color: var(--text-mid); }
+    .btn-primary:disabled, .btn-ghost:disabled { opacity: 0.35; cursor: default; pointer-events: none; }
+
+    /* ── FEEDBACK ── */
+    .feedback {
+      min-height: 28px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.75rem;
+      letter-spacing: 0.08em;
+      text-align: center;
+      color: transparent;
+      transition: color 0.2s;
+    }
+    .feedback.show-ok  { color: var(--green); }
+    .feedback.show-err { color: var(--red); }
+
+    /* ── REVEAL BANNER ── */
+    .reveal-banner {
+      display: none;
+      width: 100%;
+      padding: 14px 20px;
+      border-radius: var(--radius);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.8rem;
+      letter-spacing: 0.06em;
+      text-align: center;
+      border: 1px solid;
+    }
+    .reveal-banner.solved {
+      display: block;
+      background: rgba(46,204,113,0.08);
+      border-color: rgba(46,204,113,0.3);
+      color: var(--green);
+    }
+    .reveal-banner.failed {
+      display: block;
+      background: rgba(192,57,43,0.08);
+      border-color: rgba(192,57,43,0.3);
+      color: var(--red);
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 520px) {
+      header { padding: 16px 20px 12px; }
+      main   { padding: 28px 16px 48px; }
+      .hints-grid { grid-template-columns: 1fr; }
+      .hint-number { font-size: 1.3rem; }
+      .letter-box  { width: 32px; height: 42px; font-size: 1.1rem; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="logo">Quadr<span>a</span>nt</div>
+    <div class="subtitle">The Four-Clue Puzzle</div>
+  </div>
+</header>
+
+<div class="tab-bar-wrap">
+  <div class="tab-bar" id="tabBar"></div>
+</div>
+
+<main id="main"></main>
+
+<script>
+  // ── PUZZLE DATA ────────────────────────────────────────────────────────────
+  // To add or edit puzzles, update this array.
+  // Each entry needs: hint_1..hint_4, solution (plain text), solution_pattern (array of word lengths).
+  const PUZZLES = [
+    {
+      hint_1: "I can travel around the world without moving from my corner",
+      hint_2: "The more you take from me, the larger I become",
+      hint_3: "People have been sending me since ancient civilizations",
+      hint_4: "I come in many sizes and need something sticky to close",
+      solution: "envelope",
+      solution_pattern: [8]
+    },
+    {
+      hint_1: "I have cities but no houses, mountains but no trees",
+      hint_2: "I have water but no fish, and roads but no cars",
+      hint_3: "Explorers and adventurers have relied on me for centuries",
+      hint_4: "Fold me correctly and I will guide you home",
+      solution: "map",
+      solution_pattern: [3]
+    },
+    {
+      hint_1: "I follow you everywhere in daylight but vanish at night",
+      hint_2: "I grow taller as the sun gets lower",
+      hint_3: "I have no weight, make no sound, and cannot be touched",
+      hint_4: "I perfectly mimic your every move",
+      solution: "shadow",
+      solution_pattern: [6]
+    },
+    {
+      hint_1: "I am always hungry and must be fed, but give me water and I will die",
+      hint_2: "I can destroy an entire forest or warm a family home",
+      hint_3: "Ancient humans considered mastering me their greatest achievement",
+      hint_4: "I dance without legs and roar without a voice",
+      solution: "fire",
+      solution_pattern: [4]
+    },
+    {
+      hint_1: "The more you use me, the more I disappear",
+      hint_2: "I come in dozens of colours and live in wooden houses",
+      hint_3: "Children and artists are both very fond of me",
+      hint_4: "I shrink down as I leave a trail behind me",
+      solution: "pencil",
+      solution_pattern: [6]
+    },
+    {
+      hint_1: "I have hands but cannot clap or pick anything up",
+      hint_2: "I have a face but no eyes, nose, or mouth",
+      hint_3: "I tell you something crucial but never speak a word",
+      hint_4: "Without me, trains would miss their departures every day",
+      solution: "clock",
+      solution_pattern: [5]
+    },
+    {
+      hint_1: "Kings and queens have sat at me, but I am not a throne",
+      hint_2: "I can be made of stone and still last for centuries",
+      hint_3: "Without me, dinner parties and business deals would be awkward",
+      hint_4: "I have four legs but cannot walk a single step",
+      solution: "table",
+      solution_pattern: [5]
+    },
+    {
+      hint_1: "I get wetter the more I dry",
+      hint_2: "I am used every day but rarely washed as often as I should be",
+      hint_3: "I come in sets, often hang in pairs, and live in bathrooms",
+      hint_4: "I wrap around you but am not a blanket or a coat",
+      solution: "towel",
+      solution_pattern: [5]
+    }
+  ];
+
+  // ── STATE ─────────────────────────────────────────────────────────────────
+  const states = PUZZLES.map(() => ({ status: 'idle', letters: [] }));
+  let current = 0;
+
+  // ── ELEMENTS ──────────────────────────────────────────────────────────────
+  const tabBar = document.getElementById('tabBar');
+  const mainEl = document.getElementById('main');
+
+  // ── BOOT ──────────────────────────────────────────────────────────────────
+  buildTabs();
+  renderPuzzle(0);
+
+  // ── TABS ──────────────────────────────────────────────────────────────────
+  function buildTabs() {
+    tabBar.innerHTML = '';
+    PUZZLES.forEach((_, i) => {
+      const tab = document.createElement('div');
+      tab.className = 'tab' + (i === 0 ? ' active' : '');
+      tab.innerHTML = `
+        <span class="tab-num">#${String(i + 1).padStart(2, '0')}</span>
+        Puzzle ${i + 1}
+        <span class="tab-dot"></span>
+      `;
+      tab.addEventListener('click', () => switchTab(i));
+      tabBar.appendChild(tab);
+    });
+  }
+
+  function syncTabStatus() {
+    tabBar.querySelectorAll('.tab').forEach((tab, i) => {
+      tab.classList.toggle('active', i === current);
+      tab.classList.remove('solved', 'failed');
+      const st = states[i].status;
+      if (st === 'solved') tab.classList.add('solved');
+      if (st === 'failed') tab.classList.add('failed');
+    });
+  }
+
+  function switchTab(i) {
+    if (i === current) return;
+    current = i;
+    syncTabStatus();
+    renderPuzzle(i);
+  }
+
+  // ── RENDER PUZZLE ─────────────────────────────────────────────────────────
+  function renderPuzzle(idx) {
+    const p = PUZZLES[idx];
+    const s = states[idx];
+    const done = s.status !== 'idle';
+    const solLetters = p.solution.replace(/\s+/g, '').toUpperCase().split('');
+
+    mainEl.innerHTML = `
+      <div class="hints-grid">
+        ${[1,2,3,4].map(n => `
+          <div class="hint-card">
+            <div class="hint-label">Clue ${n}</div>
+            <div class="hint-text">${esc(p['hint_' + n])}</div>
+            <div class="hint-number">${n}</div>
+          </div>
+        `).join('')}
+      </div>
+      <div class="answer-section">
+        <div class="answer-label">Your Answer</div>
+        <div class="blanks-wrap" id="blanksWrap"></div>
+        <div class="feedback" id="feedback"></div>
+        <div class="reveal-banner ${s.status !== 'idle' ? s.status : ''}" id="revealBanner">
+          ${s.status === 'solved' ? '✓ Correct! Well done.'
+            : s.status === 'failed' ? `✗ The answer was: ${p.solution.toUpperCase()}`
+            : ''}
+        </div>
+        <div class="controls">
+          <button class="btn-ghost"   id="clearBtn"  ${done ? 'disabled' : ''}>Clear</button>
+          <button class="btn-ghost"   id="giveUpBtn" ${done ? 'disabled' : ''}>Give Up</button>
+          <button class="btn-primary" id="checkBtn"  ${done ? 'disabled' : ''}>Check Answer</button>
+        </div>
+      </div>
+    `;
+
+    // Build letter inputs
+    const blanksWrap = document.getElementById('blanksWrap');
+    const allBoxes = [];
+    let boxIdx = 0;
+
+    p.solution_pattern.forEach(len => {
+      const group = document.createElement('div');
+      group.className = 'word-group';
+      for (let li = 0; li < len; li++) {
+        const inp = document.createElement('input');
+        inp.type = 'text';
+        inp.maxLength = 1;
+        inp.className = 'letter-box';
+        inp.dataset.idx = boxIdx;
+        inp.disabled = done;
+        if (s.letters[boxIdx]) inp.value = s.letters[boxIdx];
+        if (done && s.status === 'solved') inp.classList.add('correct');
+        if (done && s.status === 'failed') {
+          inp.value = solLetters[boxIdx] || '';
+          inp.classList.add('wrong');
+        }
+        inp.addEventListener('keydown',  e => handleKey(e, allBoxes, boxIdx));
+        inp.addEventListener('input',    e => {
+          const v = e.target.value.replace(/[^a-zA-Z]/g, '');
+          e.target.value = v.slice(-1).toUpperCase();
+          saveLetters(idx, allBoxes);
+          if (e.target.value) focusNext(allBoxes, parseInt(e.target.dataset.idx));
+        });
+        inp.addEventListener('focus', e => e.target.select());
+        allBoxes.push(inp);
+        group.appendChild(inp);
+        boxIdx++;
+      }
+      blanksWrap.appendChild(group);
+    });
+
+    // Button handlers
+    document.getElementById('clearBtn').addEventListener('click', () => {
+      allBoxes.forEach(b => { b.value = ''; b.classList.remove('correct', 'wrong'); });
+      states[idx].letters = [];
+      document.getElementById('feedback').className = 'feedback';
+      allBoxes[0]?.focus();
+    });
+
+    document.getElementById('giveUpBtn').addEventListener('click', () => {
+      states[idx].status = 'failed';
+      allBoxes.forEach((b, i) => {
+        b.value = solLetters[i] || '';
+        b.classList.add('wrong');
+        b.disabled = true;
+      });
+      finalize('failed', p);
+    });
+
+    document.getElementById('checkBtn').addEventListener('click', () => {
+      if (allBoxes.some(b => !b.value)) {
+        showFeedback('Fill in all letters first.', 'err');
+        return;
+      }
+      const guess  = allBoxes.map(b => b.value.toUpperCase()).join('');
+      const answer = solLetters.join('');
+      if (guess === answer) {
+        allBoxes.forEach(b => { b.classList.remove('wrong'); b.classList.add('correct'); });
+        states[idx].status = 'solved';
+        finalize('solved', p);
+      } else {
+        allBoxes.forEach((b, i) => {
+          b.classList.remove('correct', 'wrong');
+          b.classList.add(b.value.toUpperCase() === solLetters[i] ? 'correct' : 'wrong');
+        });
+        showFeedback('Not quite — keep trying.', 'err');
+      }
+    });
+
+    // Auto-focus
+    if (!done) {
+      const first = allBoxes.find(b => !b.value) || allBoxes[0];
+      setTimeout(() => first?.focus(), 80);
+    }
+  }
+
+  // ── HELPERS ───────────────────────────────────────────────────────────────
+  function finalize(status, p) {
+    ['clearBtn', 'giveUpBtn', 'checkBtn'].forEach(id => {
+      document.getElementById(id).disabled = true;
+    });
+    document.getElementById('feedback').className = 'feedback';
+    const banner = document.getElementById('revealBanner');
+    banner.className = `reveal-banner ${status}`;
+    banner.textContent = status === 'solved'
+      ? '✓ Correct! Well done.'
+      : `✗ The answer was: ${p.solution.toUpperCase()}`;
+    syncTabStatus();
+  }
+
+  function saveLetters(idx, boxes) {
+    states[idx].letters = boxes.map(b => b.value);
+  }
+
+  function showFeedback(msg, type) {
+    const el = document.getElementById('feedback');
+    el.textContent = msg;
+    el.className = `feedback show-${type}`;
+    clearTimeout(el._t);
+    el._t = setTimeout(() => { el.className = 'feedback'; }, 2400);
+  }
+
+  function focusNext(boxes, idx) {
+    for (let i = idx + 1; i < boxes.length; i++) {
+      if (!boxes[i].value) { boxes[i].focus(); return; }
+    }
+    if (idx + 1 < boxes.length) boxes[idx + 1].focus();
+  }
+
+  function handleKey(e, boxes, idx) {
+    if (e.key === 'Backspace' && !boxes[idx].value && idx > 0) {
+      boxes[idx - 1].value = '';
+      boxes[idx - 1].classList.remove('correct', 'wrong');
+      boxes[idx - 1].focus();
+      e.preventDefault();
+    }
+    if (e.key === 'ArrowLeft'  && idx > 0)               { boxes[idx - 1].focus(); e.preventDefault(); }
+    if (e.key === 'ArrowRight' && idx < boxes.length - 1) { boxes[idx + 1].focus(); e.preventDefault(); }
+    if (e.key === 'Enter') document.getElementById('checkBtn')?.click();
+  }
+
+  function esc(str) {
+    return str
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+</script>
+</body>
+</html>
